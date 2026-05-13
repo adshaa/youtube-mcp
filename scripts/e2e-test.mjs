@@ -119,8 +119,8 @@ async function main() {
   // ── Startup ──────────────────────────────────────────────
   console.log("Starting server...");
   await startServer();
+  tests++; passed++;
   pass("Server started");
-  tests++;
 
   // ── tools/list ───────────────────────────────────────────
   console.log("\n📋 Listing tools...");
