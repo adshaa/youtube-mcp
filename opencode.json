@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "youtube-mcp": {
+      "type": "local",
+      "command": ["npx", "tsx", "src/index.ts"],
+      "enabled": true
+    }
+  }
+}

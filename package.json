@@ -28,12 +28,14 @@
     "youtube-mcp": "./build/index.js"
   },
   "scripts": {
-    "start": "node src/index.ts",
+    "start": "tsx src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=build/index.js --minify --sourcemap --external:typescript --external:effect --external:cors --external:fastmcp --external:youtubei.js --external:zod",
     "build:http": "esbuild src/server/http-server.ts --bundle --platform=node --outfile=build/http-server.js --minify --sourcemap --external:cors --external:fastmcp --external:youtubei.js --external:zod",
-    "dev": "node --loader ts-node/esm --watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "start:http": "node src/server/http-server.ts",
-    "dev:http": "node --loader ts-node/esm --watch src/server/http-server.ts",
+    "dev:http": "tsx watch src/server/http-server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "inspector": "npx @modelcontextprotocol/inspector@0.11.0",
     "prepublishOnly": "npm run build && echo '#!/usr/bin/env node' > build/index.js.tmp && cat build/index.js >> build/index.js.tmp && mv build/index.js.tmp build/index.js && chmod +x build/index.js"
   },
@@ -41,7 +43,9 @@
     "@types/cors": "^2.8.17",
     "@types/node": "^20.11.0",
     "esbuild": "^0.23.1",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "vitest": "^4.1.6"
   },
   "peerDependencies": {
     "effect": "^3.14.4",
