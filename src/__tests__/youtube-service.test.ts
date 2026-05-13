@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { YoutubeService } from "../core/services/youtube-service.js";
+import { YoutubeService, clearTranscriptCache } from "../core/services/youtube-service.js";
 
 const mockInnertube = vi.hoisted(() => ({
   getInfo: vi.fn(),
@@ -39,6 +39,7 @@ function makeTranscript(segments: ReturnType<typeof makeSegment>[]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearTranscriptCache();
 });
 
 describe("YoutubeService", () => {

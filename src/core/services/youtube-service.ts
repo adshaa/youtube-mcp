@@ -18,7 +18,20 @@ type GetTranscriptOptions = {
   chunkBySilence?: boolean;
   silenceThreshold?: number;
   skipSponsor?: boolean;
+  plainText?: boolean;
 };
+
+type CacheEntry = {
+  segments: TranscriptSegment[];
+  cachedAt: number;
+};
+
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const transcriptCache = new Map<string, CacheEntry>();
+
+export function clearTranscriptCache() {
+  transcriptCache.clear();
+}
 
 export type VideoSearchResult = {
   title: string;
@@ -66,33 +79,27 @@ export class YoutubeService {
         throw new Error("Invalid YouTube URL");
       }
 
-      const skipSponsorPromise = options.skipSponsor
-        ? SponsorBlockService.getSkipSegments(videoId).catch(() => [] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>)
-        : Promise.resolve([] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>);
-
-      const [youtube, skipSegments] = await Promise.all([
-        Innertube.create(),
-        skipSponsorPromise,
+      const [skipSegments, rawSegments] = await Promise.all([
+        options.skipSponsor
+          ? SponsorBlockService.getSkipSegments(videoId).catch(() => [] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>)
+          : Promise.resolve([] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>),
+        this.getRawSegments(videoId),
       ]);
 
-      const info = await youtube.getInfo(videoId);
-
-      if (!info.captions || info.captions.caption_tracks?.length === 0) {
-        throw new Error("No caption tracks found for this video.");
-      }
-
-      const _transcript = await info.getTranscript();
-      let segments: TranscriptSegment[] =
-        _transcript.transcript.content?.body?.initial_segments?.map(
-          ({ snippet, start_ms, end_ms }) => ({
-            text: snippet?.text || "",
-            start_ms: Number(start_ms),
-            end_ms: Number(end_ms),
-          })
-        ) || [];
-
+      let segments = rawSegments;
       if (skipSegments.length > 0) {
         segments = this.filterSponsorSegments(segments, skipSegments);
+      }
+
+      if (options.plainText) {
+        const fullText = segments.map((s) => s.text).join(" ");
+        return [
+          {
+            text: fullText,
+            start_ms: segments[0]?.start_ms || 0,
+            end_ms: segments[segments.length - 1]?.end_ms || 0,
+          },
+        ];
       }
 
       if (options.chunkBySilence) {
@@ -113,6 +120,35 @@ export class YoutubeService {
       console.error("Failed to fetch transcript:", error);
       throw new Error("Failed to fetch transcript");
     }
+  }
+
+  private static async getRawSegments(
+    videoId: string
+  ): Promise<TranscriptSegment[]> {
+    const cached = transcriptCache.get(videoId);
+    if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+      return cached.segments;
+    }
+
+    const youtube = await Innertube.create();
+    const info = await youtube.getInfo(videoId);
+
+    if (!info.captions || info.captions.caption_tracks?.length === 0) {
+      throw new Error("No caption tracks found for this video.");
+    }
+
+    const _transcript = await info.getTranscript();
+    const segments: TranscriptSegment[] =
+      _transcript.transcript.content?.body?.initial_segments?.map(
+        ({ snippet, start_ms, end_ms }) => ({
+          text: snippet?.text || "",
+          start_ms: Number(start_ms),
+          end_ms: Number(end_ms),
+        })
+      ) || [];
+
+    transcriptCache.set(videoId, { segments, cachedAt: Date.now() });
+    return segments;
   }
 
   private static filterSponsorSegments(

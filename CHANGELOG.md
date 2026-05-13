@@ -6,6 +6,8 @@
   - Primary method: yt-dlp + ffmpeg-static for full-quality frames (up to 4K)
   - Automatic fallback: YouTube storyboards via sharp (max 320×180) when yt-dlp is not installed
   - Response includes method, resolution, and quality guidance
+- **`plainText` option on `get_transcript`**: Returns full transcript as a single plain text string (no timestamps). Reduces context usage by ~70% compared to the default timestamped format.
+- **Transcript caching**: Raw transcripts are cached in-memory for 10 minutes. Subsequent fetches with different options (plainText, chunking, timestamps) reuse the cached data — takes 0ms.
 - **SponsorBlock integration**: Added `skipSponsor` parameter to `get_transcript` tool.
   - Fetches sponsor segment timestamps from SponsorBlock API (no auth needed)
   - Filters sponsored content from transcripts when enabled

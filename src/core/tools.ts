@@ -37,6 +37,12 @@ export function registerTools(server: FastMCP) {
         .describe(
           "Optional: If true, removes sponsor/ad segments from the transcript using the SponsorBlock API. Fetches sponsor timestamps and filters out transcript text that falls within sponsored sections."
         ),
+      plainText: z
+        .boolean()
+        .optional()
+        .describe(
+          "Optional: If true, returns the full transcript as a single plain text string without timestamp data. This uses less context than the default timestamped format and is better for summarization. If you later need timestamps, subsequent calls are cached."
+        ),
     }),
     execute: async (params) => {
       const transcript = await services.YoutubeService.getTranscript(
@@ -46,6 +52,7 @@ export function registerTools(server: FastMCP) {
           chunkBySilence: params.chunkBySilence,
           silenceThreshold: params.silenceThreshold,
           skipSponsor: params.skipSponsor,
+          plainText: params.plainText,
         }
       );
       return { type: "text", text: JSON.stringify(transcript) };

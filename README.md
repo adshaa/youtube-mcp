@@ -1,22 +1,31 @@
 # @inlustris/youtube-mcp
 
-**No-fuss YouTube MCP server — no API keys required!**
+**Ground your AI agents in YouTube's best content — no API keys, zero config.**
 
 ![NPM Version](https://img.shields.io/npm/v/@inlustris/youtube-mcp)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-A Model Context Protocol (MCP) server for YouTube transcripts, search, channels, screenshots, and sponsor-blocked transcripts. Built with [FastMCP](https://github.com/anomalyco/fastmcp) and [youtubei.js](https://github.com/LuanRT/YouTube.js).
+YouTube is the world's largest library of expert knowledge — tutorials, talks, reviews, deep dives. But AI agents can't watch videos.
 
-## Features
+This MCP server bridges that gap. It gives your agent access to YouTube transcripts, search, channel data, and video screenshots through simple tools. No Google API keys. No OAuth. No setup.
 
-- **Get transcripts** — fetch YouTube video transcripts with timestamps
-- **Search videos** — search YouTube by keyword with sort options
-- **Search channels** — find YouTube channels by name
-- **Channel videos** — list all videos from a channel
-- **Transcript chunking** — split by character size or silence gaps
-- **SponsorBlock integration** — optionally remove sponsored segments from transcripts (`skipSponsor`)
-- **Video screenshots** — capture frames from any YouTube video by timestamp
-- **No API keys** — works without Google API credentials
+Built with [FastMCP](https://github.com/anomalyco/fastmcp) and [youtubei.js](https://github.com/LuanRT/YouTube.js).
+
+## Why YouTube for AI grounding?
+
+Web search is noisy. YouTube content is **ranked, reviewed, and curated** — videos with high view counts, reputable creators, and timestamped transcripts that make it ideal for LLM context. Instead of scraping forums or blogs, your agent can pull the exact transcript from a relevant video, search across channels, or capture a screenshot of a specific moment.
+
+This isn't another "AI skill" you have to maintain. It's a single npm package that works immediately.
+
+## What you get
+
+| Tool | Purpose |
+|---|---|
+| `get_transcript` | Video transcript with timestamps, or plain text via `plainText`. Optionally strip sponsor segments via `skipSponsor`. Transcripts are cached in-memory — subsequent fetches are instant. |
+| `get_video_frame` | Screenshot at any timestamp. Full quality when yt-dlp is available; falls back gracefully. |
+| `search_videos` | Search YouTube with sort by relevance, date, rating, view count. |
+| `search_channels` | Find channels by query. |
+| `get_channel_videos` | List every video from a channel. |
 
 ## Install
 
@@ -24,23 +33,7 @@ A Model Context Protocol (MCP) server for YouTube transcripts, search, channels,
 npm install -g @inlustris/youtube-mcp
 ```
 
-### Optional: Full-quality screenshots
-
-The `get_video_frame` tool works out of the box for low-resolution captures. For **full-quality screenshots** (up to 4K), install:
-
-```bash
-brew install yt-dlp ffmpeg
-```
-
-On Linux: `apt install yt-dlp ffmpeg` or `pip install yt-dlp`.
-
-The tool auto-detects yt-dlp and falls back gracefully if it's not installed.
-
-## Usage
-
-### MCP Client (Cursor, Claude Desktop, etc.)
-
-Add to your MCP client config:
+Add to any MCP client:
 
 ```json
 {
@@ -53,103 +46,51 @@ Add to your MCP client config:
 }
 ```
 
-For [opencode](https://opencode.ai), add to `opencode.json`:
+Works with Claude Desktop, Cursor, opencode, VS Code Copilot, and any MCP-compatible agent.
 
-```json
-{
-  "mcp": {
-    "youtube-mcp": {
-      "type": "local",
-      "command": ["npx", "-y", "@inlustris/youtube-mcp@latest"],
-      "enabled": true
-    }
-  }
-}
-```
+## Full-quality screenshots (optional)
 
-### CLI
+`get_video_frame` works out of the box using YouTube storyboards (320×180). For **full-resolution captures** (720p, 1080p, 4K), install the system tools:
 
 ```bash
-youtube-mcp
+brew install yt-dlp ffmpeg
 ```
 
-Starts the MCP server on stdio. Connect your MCP client to it.
+The tool detects yt-dlp automatically and upgrades itself — no config changes needed.
 
-## Tools
+## SponsorBlock
 
-| Tool | Description | Key Params |
-|---|---|---|
-| `get_transcript` | Get video transcript | `videoUrl` (req), `chunkSize`, `chunkBySilence`, `silenceThreshold`, `skipSponsor` |
-| `search_videos` | Search videos | `query` (req), `sortBy` |
-| `search_channels` | Search channels | `query` (req), `sortBy` |
-| `get_channel_videos` | Channel video list | `channelId` (req), `maxResults` |
-| `get_video_frame` | Capture video frame | `videoUrl` (req), `timestamp` (req), `quality` |
+Pass `skipSponsor: true` to `get_transcript`. It fetches sponsor timestamps from the SponsorBlock API (no auth, free) and removes sponsored content from the transcript. Great for getting clean, ad-free video context.
 
-### Tool details
+## Use cases
 
-**`get_transcript`** — `skipSponsor: boolean`
-When enabled, fetches sponsor segment timestamps from the [SponsorBlock API](https://sponsor.ajay.app) (no auth needed) and filters them out of the transcript.
-
-**`get_video_frame`** — Capture a screenshot from any YouTube video at a given timestamp.
-- **With yt-dlp**: Full-resolution frame (up to 4K) using fast keyframe-seeking via ffmpeg.
-- **Without yt-dlp**: Falls back to YouTube storyboards (max 320×180, 2-second intervals).
-- The response includes the method used (`yt-dlp` or `storyboard`) and quality guidance.
+- **Research agents**: Pull transcripts from expert talks, conference presentations, or technical deep-dives instead of skimming blog posts.
+- **Content analysis**: Search for relevant YouTube content by topic, then extract transcripts at scale.
+- **Visual grounding**: Capture screenshots at key moments alongside transcripts for multimodal understanding.
+- **Learning tools**: Let users ask questions about specific video timestamps and get grounded answers.
 
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Dev server with hot reload
-npm run dev
-
-# Tests
-npm test              # single run
-npm run test:watch    # watch mode
-
-# Build for production
-npm run build
-
-# Run the built server
-node build/index.js
+npm run dev        # hot-reload
+npm test           # 31 tests
+npm run build      # production bundle
 ```
-
-### Project Structure
 
 ```
 src/
-├── index.ts                  # Entry point
-├── server/
-│   └── server.ts             # FastMCP server setup
+├── index.ts
+├── server/server.ts
 ├── core/
-│   ├── tools.ts              # Tool definitions
-│   ├── resources.ts          # Resource templates
-│   ├── prompts.ts            # Prompt templates
+│   ├── tools.ts
+│   ├── resources.ts
 │   └── services/
-│       ├── youtube-service.ts # YouTube API calls (via youtubei.js)
-│       ├── sponsorblock-service.ts  # SponsorBlock API client
-│       └── screenshot-service.ts    # Screenshot capture (yt-dlp + storyboard fallback)
+│       ├── youtube-service.ts
+│       ├── sponsorblock-service.ts
+│       └── screenshot-service.ts
 └── __tests__/
-    ├── youtube-service.test.ts
-    ├── tools.test.ts
-    └── resources.test.ts
 ```
-
-## Dependencies
-
-| Dependency | Type | Purpose |
-|---|---|---|
-| `youtubei.js` | npm | YouTube data API (transcripts, search, channels) |
-| `fastmcp` | npm | MCP server framework |
-| `zod` | npm | Parameter validation |
-| `ffmpeg-static` | npm | Bundled ffmpeg binary for frame extraction |
-| `sharp` | npm | Image processing for storyboard thumbnails |
-| `yt-dlp` | **system** *(optional)* | Full-quality YouTube video URL extraction |
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
