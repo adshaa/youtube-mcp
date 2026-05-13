@@ -2,7 +2,7 @@
   "name": "@inlustris/youtube-mcp",
   "main": "build/index.js",
   "type": "module",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "No-fuss YouTube transcripts for MCP - no API keys required! A Model Context Protocol server to get YouTube video transcripts.",
   "repository": {
     "type": "git",
