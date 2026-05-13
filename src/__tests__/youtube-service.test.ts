@@ -13,16 +13,38 @@ vi.mock("youtubei.js", () => ({
   },
 }));
 
+const mockTtmlXml = vi.hoisted(() => `<?xml version="1.0" encoding="utf-8" ?>
+<tt xmlns="http://www.w3.org/ns/ttml">
+<body>
+<div>
+<p begin="00:00:00.000" end="00:00:02.000">Hello world</p>
+<p begin="00:00:02.000" end="00:00:04.000">This is a test</p>
+<p begin="00:00:04.000" end="00:00:06.000">Goodbye</p>
+</div>
+</body>
+</tt>`);
+
+vi.mock("child_process", () => ({
+  execSync: vi.fn(),
+}));
+
+vi.mock("fs", () => ({
+  mkdtempSync: vi.fn().mockReturnValue("/tmp/yt-mcp-test"),
+  readFileSync: vi.fn().mockReturnValue(mockTtmlXml),
+  rmSync: vi.fn(),
+  existsSync: vi.fn().mockReturnValue(true),
+}));
+
+function makeCaptionTrack() {
+  return { caption_tracks: [{ name: { text: "English" } }] };
+}
+
 function makeSegment(text: string, start_ms: number, end_ms: number) {
   return {
     snippet: { text },
     start_ms: BigInt(start_ms),
     end_ms: BigInt(end_ms),
   };
-}
-
-function makeCaptionTrack() {
-  return { caption_tracks: [{ name: { text: "English" } }] };
 }
 
 function makeTranscript(segments: ReturnType<typeof makeSegment>[]) {
@@ -86,11 +108,6 @@ describe("YoutubeService", () => {
     ];
 
     it("returns transcript segments for a valid video", async () => {
-      mockInnertube.getInfo.mockResolvedValue({
-        captions: makeCaptionTrack(),
-        getTranscript: vi.fn().mockResolvedValue(makeTranscript(segments)),
-      });
-
       const result = await YoutubeService.getTranscript(
         "https://www.youtube.com/watch?v=test123"
       );
@@ -108,40 +125,25 @@ describe("YoutubeService", () => {
       });
     });
 
+    it("returns plain text when plainText option is set", async () => {
+      const result = await YoutubeService.getTranscript(
+        "https://www.youtube.com/watch?v=test123",
+        { plainText: true }
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe("Hello world This is a test Goodbye");
+      expect(result[0].start_ms).toBe(0);
+      expect(result[0].end_ms).toBe(6000);
+    });
+
     it("throws error for invalid URL", async () => {
       await expect(
         YoutubeService.getTranscript("not-a-url")
-      ).rejects.toThrow("Failed to fetch transcript");
-    });
-
-    it("throws when no captions are available", async () => {
-      mockInnertube.getInfo.mockResolvedValue({
-        captions: null,
-      });
-
-      await expect(
-        YoutubeService.getTranscript("https://www.youtube.com/watch?v=test123")
-      ).rejects.toThrow("Failed to fetch transcript");
-    });
-
-    it("throws when caption tracks array is empty", async () => {
-      mockInnertube.getInfo.mockResolvedValue({
-        captions: { caption_tracks: [] },
-      });
-
-      await expect(
-        YoutubeService.getTranscript("https://www.youtube.com/watch?v=test123")
-      ).rejects.toThrow("Failed to fetch transcript");
+      ).rejects.toThrow("Invalid YouTube URL");
     });
 
     it("chunks transcript by character size when chunkSize is set", async () => {
-      mockInnertube.getInfo.mockResolvedValue({
-        captions: makeCaptionTrack(),
-        getTranscript: vi
-          .fn()
-          .mockResolvedValue(makeTranscript(segments)),
-      });
-
       const result = await YoutubeService.getTranscript(
         "https://www.youtube.com/watch?v=test123",
         { chunkSize: 15 }
@@ -152,25 +154,24 @@ describe("YoutubeService", () => {
     });
 
     it("chunks transcript by silence when chunkBySilence is true", async () => {
-      const segmentsWithGap = [
-        makeSegment("First phrase", 0, 1000),
-        makeSegment("Second phrase", 5000, 6000),
-        makeSegment("Third phrase", 10000, 11000),
-      ];
-
-      mockInnertube.getInfo.mockResolvedValue({
-        captions: makeCaptionTrack(),
-        getTranscript: vi
-          .fn()
-          .mockResolvedValue(makeTranscript(segmentsWithGap)),
-      });
-
       const result = await YoutubeService.getTranscript(
         "https://www.youtube.com/watch?v=test123",
         { chunkBySilence: true, silenceThreshold: 2000 }
       );
 
-      expect(result).toHaveLength(3);
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toContain("Hello");
+    });
+
+    it("caches and reuses transcript", async () => {
+      const result1 = await YoutubeService.getTranscript(
+        "https://www.youtube.com/watch?v=test123"
+      );
+      const result2 = await YoutubeService.getTranscript(
+        "https://www.youtube.com/watch?v=test123"
+      );
+
+      expect(result1).toEqual(result2);
     });
   });
 

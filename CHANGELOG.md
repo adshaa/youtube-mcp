@@ -12,9 +12,12 @@
   - Fetches sponsor segment timestamps from SponsorBlock API (no auth needed)
   - Filters sponsored content from transcripts when enabled
   - Runs in parallel with transcript fetch (negligible latency)
-- Updated `youtubei.js` from v15.0.1 to v17.0.1 for improved reliability
+- **Refactored transcript fetching**: Now uses yt-dlp instead of youtubei.js for reliable transcript extraction (youtubei.js `getTranscript()` API broke upstream). yt-dlp handles all YouTube API changes automatically.
+- Updated `youtubei.js` to v17.0.1
 - Added `ffmpeg-static` for bundled ffmpeg binary (no system ffmpeg required)
 - Added `sharp` for storyboard image processing
+- Added `scripts/e2e-test.mjs` for end-to-end MCP testing via stdio transport
+- `prepublishOnly` now runs e2e tests before publish
 - Updated test suite to 31 tests
 
 ## 1.0.8 (2025-01-XX)

@@ -34,8 +34,9 @@
     "dev:http": "tsx watch src/server/http-server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "inspector": "npx @modelcontextprotocol/inspector@0.11.0",
-    "prepublishOnly": "npm run build && echo '#!/usr/bin/env node' > build/index.js.tmp && cat build/index.js >> build/index.js.tmp && mv build/index.js.tmp build/index.js && chmod +x build/index.js"
+    "e2e": "node scripts/e2e-test.mjs",
+    "dev:inspector": "npx @modelcontextprotocol/inspector@0.11.0",
+    "prepublishOnly": "npm run build && npm run e2e && echo '#!/usr/bin/env node' > build/index.js.tmp && cat build/index.js >> build/index.js.tmp && mv build/index.js.tmp build/index.js && chmod +x build/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
