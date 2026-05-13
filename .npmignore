@@ -1,5 +1,7 @@
 src
 .vscode
-.gitignore
-bun.lockb
 .cursor
+.gitignore
+vitest.config.ts
+tsconfig.json
+bun.lockb

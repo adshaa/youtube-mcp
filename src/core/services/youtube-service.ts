@@ -1,7 +1,8 @@
 import { Innertube } from "youtubei.js";
+import { SponsorBlockService } from "./sponsorblock-service.js";
 
 type TranscriptSegment = {
-  text: string ;
+  text: string;
   start_ms: number;
   end_ms: number;
 };
@@ -16,6 +17,7 @@ type GetTranscriptOptions = {
   chunkSize?: number;
   chunkBySilence?: boolean;
   silenceThreshold?: number;
+  skipSponsor?: boolean;
 };
 
 export type VideoSearchResult = {
@@ -29,7 +31,13 @@ export type ChannelSearchResult = {
   channelId: string;
 };
 
-export type SearchSortBy = 'relevance' | 'date' | 'rating' | 'viewCount' | 'title' | 'videoCount';
+export type SearchSortBy =
+  | "relevance"
+  | "date"
+  | "rating"
+  | "viewCount"
+  | "title"
+  | "videoCount";
 
 export type ChannelVideoResult = {
   title: string;
@@ -39,30 +47,15 @@ export type ChannelVideoResult = {
   thumbnailUrl: string;
 };
 
-/**
- * A service for fetching YouTube video transcripts
- */
 export class YoutubeService {
   private static getVideoId(url: string): string | null {
-    // Look for youtube.com/watch?v=VIDEO_ID
     let match = url.match(/[?&]v=([^&]+)/);
-    if (match) {
-      return match[1];
-    }
-    // Look for youtu.be/VIDEO_ID
+    if (match) return match[1];
     match = url.match(/youtu.be\/([^?]+)/);
-    if (match) {
-      return match[1];
-    }
+    if (match) return match[1];
     return null;
   }
 
-  /**
-   * Get the transcript of a YouTube video
-   * @param videoUrl The URL of the YouTube video
-   * @param options Options for chunking the transcript
-   * @returns The transcript of the video
-   */
   public static async getTranscript(
     videoUrl: string,
     options: GetTranscriptOptions = {}
@@ -73,7 +66,15 @@ export class YoutubeService {
         throw new Error("Invalid YouTube URL");
       }
 
-      const youtube = await Innertube.create();
+      const skipSponsorPromise = options.skipSponsor
+        ? SponsorBlockService.getSkipSegments(videoId).catch(() => [] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>)
+        : Promise.resolve([] as Awaited<ReturnType<typeof SponsorBlockService.getSkipSegments>>);
+
+      const [youtube, skipSegments] = await Promise.all([
+        Innertube.create(),
+        skipSponsorPromise,
+      ]);
+
       const info = await youtube.getInfo(videoId);
 
       if (!info.captions || info.captions.caption_tracks?.length === 0) {
@@ -81,7 +82,7 @@ export class YoutubeService {
       }
 
       const _transcript = await info.getTranscript();
-      const segments: TranscriptSegment[] =
+      let segments: TranscriptSegment[] =
         _transcript.transcript.content?.body?.initial_segments?.map(
           ({ snippet, start_ms, end_ms }) => ({
             text: snippet?.text || "",
@@ -89,6 +90,10 @@ export class YoutubeService {
             end_ms: Number(end_ms),
           })
         ) || [];
+
+      if (skipSegments.length > 0) {
+        segments = this.filterSponsorSegments(segments, skipSegments);
+      }
 
       if (options.chunkBySilence) {
         return this.chunkSegmentsBySilence(segments, options.silenceThreshold);
@@ -104,14 +109,23 @@ export class YoutubeService {
         end_ms,
       }));
     } catch (error) {
-
-      console.log("🚀ԅ(≖⌣≖ԅ) ~ YoutubeService ~ error => ", error)
-
-      
-
+      console.log("YouTubeService ~ getTranscript error => ", error);
       console.error("Failed to fetch transcript:", error);
       throw new Error("Failed to fetch transcript");
     }
+  }
+
+  private static filterSponsorSegments(
+    segments: TranscriptSegment[],
+    skipSegments: { startTime: number; endTime: number }[]
+  ): TranscriptSegment[] {
+    return segments.filter((seg) => {
+      const segStart = seg.start_ms / 1000;
+      const segEnd = seg.end_ms / 1000;
+      return !skipSegments.some(
+        (skip) => segStart < skip.endTime && segEnd > skip.startTime
+      );
+    });
   }
 
   private static chunkSegments(
@@ -191,95 +205,89 @@ export class YoutubeService {
     return chunks;
   }
 
-  public static async searchVideos(query: string, sortBy: SearchSortBy = 'rating'): Promise<VideoSearchResult[]> {
+  public static async searchVideos(
+    query: string,
+    sortBy: SearchSortBy = "rating"
+  ): Promise<VideoSearchResult[]> {
     const youtube = await Innertube.create();
+    const searchOptions: any = { type: "video" };
 
-    // Create search options with sorting
-    const searchOptions: any = { type: 'video' };
-
-    // Map our sort options to youtubei.js sort options
     switch (sortBy) {
-      case 'date':
-        searchOptions.sort_by = 'upload_date';
+      case "date":
+        searchOptions.sort_by = "upload_date";
         break;
-      case 'viewCount':
-        searchOptions.sort_by = 'view_count';
+      case "viewCount":
+        searchOptions.sort_by = "view_count";
         break;
-      case 'rating':
-        searchOptions.sort_by = 'rating';
+      case "rating":
+        searchOptions.sort_by = "rating";
         break;
-      case 'relevance':
-        searchOptions.sort_by = 'relevance';
+      case "relevance":
+        searchOptions.sort_by = "relevance";
         break;
       default:
-        searchOptions.sort_by = 'rating'; // Default to rating
+        searchOptions.sort_by = "rating";
     }
 
     const search = await youtube.search(query, searchOptions);
-    return search.videos.map(video => {
-      // Safely extract title
-      const title = ('title' in video && video.title) ? video.title.toString() : 'No title';
-
-      // Safely extract video ID
-      const videoId = ('id' in video && video.id) ? video.id : 'No ID';
-
-      // Safely extract channel name from author
-      let channelName = 'No channel name';
-      if ('author' in video && video.author) {
-        if (typeof video.author === 'object' && 'name' in video.author) {
+    return search.videos.map((video) => {
+      const title =
+        "title" in video && video.title ? video.title.toString() : "No title";
+      const videoId =
+        "id" in video && video.id ? video.id : "No ID";
+      let channelName = "No channel name";
+      if ("author" in video && video.author) {
+        if (typeof video.author === "object" && "name" in video.author) {
           channelName = video.author.name;
-        } else if (typeof video.author === 'string') {
+        } else if (typeof video.author === "string") {
           channelName = video.author;
         }
       }
-
       return { title, videoId, channelName };
     });
   }
 
-  public static async searchChannels(query: string, sortBy: SearchSortBy = 'rating'): Promise<ChannelSearchResult[]> {
+  public static async searchChannels(
+    query: string,
+    sortBy: SearchSortBy = "rating"
+  ): Promise<ChannelSearchResult[]> {
     const youtube = await Innertube.create();
+    const searchOptions: any = { type: "channel" };
 
-    // Create search options with sorting
-    const searchOptions: any = { type: 'channel' };
-
-    // Map our sort options to youtubei.js sort options  
-    // Note: For channels, videoCount and relevance are most relevant
     switch (sortBy) {
-      case 'date':
-        searchOptions.sort_by = 'upload_date';
+      case "date":
+        searchOptions.sort_by = "upload_date";
         break;
-      case 'videoCount':
-        searchOptions.sort_by = 'video_count';
+      case "videoCount":
+        searchOptions.sort_by = "video_count";
         break;
-      case 'viewCount':
-        searchOptions.sort_by = 'view_count';
+      case "viewCount":
+        searchOptions.sort_by = "view_count";
         break;
-      case 'rating':
-        searchOptions.sort_by = 'rating';
+      case "rating":
+        searchOptions.sort_by = "rating";
         break;
-      case 'relevance':
-        searchOptions.sort_by = 'relevance';
+      case "relevance":
+        searchOptions.sort_by = "relevance";
         break;
       default:
-        searchOptions.sort_by = 'rating'; // Default to rating
+        searchOptions.sort_by = "rating";
     }
 
     const search = await youtube.search(query, searchOptions);
-    return search.channels.map(channel => {
-      // Safely extract channel name and ID from author
-      let channelName = 'No channel name';
-      let channelId = 'No channel ID';
+    return search.channels.map((channel) => {
+      let channelName = "No channel name";
+      let channelId = "No channel ID";
 
-      if ('author' in channel && channel.author) {
-        if (typeof channel.author === 'object') {
-          if ('name' in channel.author) {
+      if ("author" in channel && channel.author) {
+        if (typeof channel.author === "object") {
+          if ("name" in channel.author) {
             channelName = channel.author.name;
           }
-          if ('id' in channel.author) {
+          if ("id" in channel.author) {
             channelId = channel.author.id;
           }
-        } else if (typeof channel.author === 'string') {
+        } else if (typeof channel.author === "string") {
           channelName = channel.author;
         }
       }
@@ -288,40 +296,43 @@ export class YoutubeService {
     });
   }
 
-  public static async getChannelVideos(channelId: string, maxResults: number = 50): Promise<ChannelVideoResult[]> {
+  public static async getChannelVideos(
+    channelId: string,
+    maxResults: number = 50
+  ): Promise<ChannelVideoResult[]> {
     const youtube = await Innertube.create();
-
-    // Get the channel to access its uploads playlist
     const channel = await youtube.getChannel(channelId);
 
     if (!channel || !channel.header) {
       throw new Error(`Channel not found: ${channelId}`);
     }
 
-    // Get the uploads playlist from the channel
     const videos = await channel.getVideos();
 
-    return videos.videos.slice(0, maxResults).map(video => {
-      // Safely extract video properties
-      const title = ('title' in video && video.title) ? video.title.toString() : 'No title';
-      const videoId = ('id' in video && video.id) ? video.id : 'No ID';
+    return videos.videos.slice(0, maxResults).map((video) => {
+      const title =
+        "title" in video && video.title ? video.title.toString() : "No title";
+      const videoId =
+        "id" in video && video.id ? video.id : "No ID";
 
-      // Extract publish date
-      let publishedAt = 'Unknown date';
-      if ('published' in video && video.published) {
+      let publishedAt = "Unknown date";
+      if ("published" in video && video.published) {
         publishedAt = video.published.toString();
       }
 
-      // Extract description 
-      let description = 'No description';
-      if ('description' in video && video.description) {
+      let description = "No description";
+      if ("description" in video && video.description) {
         description = video.description.toString();
       }
 
-      // Extract thumbnail URL
-      let thumbnailUrl = '';
-      if ('thumbnails' in video && video.thumbnails && Array.isArray(video.thumbnails) && video.thumbnails.length > 0) {
-        thumbnailUrl = video.thumbnails[0].url || '';
+      let thumbnailUrl = "";
+      if (
+        "thumbnails" in video &&
+        video.thumbnails &&
+        Array.isArray(video.thumbnails) &&
+        video.thumbnails.length > 0
+      ) {
+        thumbnailUrl = video.thumbnails[0].url || "";
       }
 
       return {
@@ -329,7 +340,7 @@ export class YoutubeService {
         videoId,
         publishedAt,
         description,
-        thumbnailUrl
+        thumbnailUrl,
       };
     });
   }

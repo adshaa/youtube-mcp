@@ -21,9 +21,9 @@ describe("registerTools", () => {
     server = new FastMCP({ name: "test", version: "1.0.0" });
   });
 
-  it("registers all 4 tools", () => {
+  it("registers all 5 tools", () => {
     registerTools(server);
-    expect(server.addTool).toHaveBeenCalledTimes(4);
+    expect(server.addTool).toHaveBeenCalledTimes(5);
   });
 
   it("registers get_transcript tool with correct schema", () => {
@@ -75,6 +75,19 @@ describe("registerTools", () => {
 
     expect(tool).toBeDefined();
     expect(tool.description).toContain("channel");
+    expect(tool.parameters).toBeDefined();
+  });
+
+  it("registers get_video_frame tool with correct schema", () => {
+    registerTools(server);
+
+    const calls = (server.addTool as ReturnType<typeof vi.fn>).mock.calls;
+    const tool = calls.find(
+      ([t]: any[]) => t.name === "get_video_frame"
+    )?.[0];
+
+    expect(tool).toBeDefined();
+    expect(tool.description).toContain("screenshot");
     expect(tool.parameters).toBeDefined();
   });
 });

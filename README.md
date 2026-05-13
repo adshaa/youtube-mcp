@@ -1,31 +1,46 @@
 # @inlustris/youtube-mcp
 
-**No-fuss YouTube transcripts for MCP - no API keys required!**
+**No-fuss YouTube MCP server — no API keys required!**
 
 ![NPM Version](https://img.shields.io/npm/v/@inlustris/youtube-mcp)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6)
 
-A Model Context Protocol (MCP) server for YouTube video transcripts and search.
-
-*No fuss setup - no Google API keys required!* Just install and start extracting transcripts.
+A Model Context Protocol (MCP) server for YouTube transcripts, search, channels, screenshots, and sponsor-blocked transcripts. Built with [FastMCP](https://github.com/anomalyco/fastmcp) and [youtubei.js](https://github.com/LuanRT/YouTube.js).
 
 ## Features
 
-- Get YouTube video transcripts with timestamps
-- Search YouTube videos and channels
-- Get channel video lists
-- Chunking support for large transcripts
+- **Get transcripts** — fetch YouTube video transcripts with timestamps
+- **Search videos** — search YouTube by keyword with sort options
+- **Search channels** — find YouTube channels by name
+- **Channel videos** — list all videos from a channel
+- **Transcript chunking** — split by character size or silence gaps
+- **SponsorBlock integration** — optionally remove sponsored segments from transcripts (`skipSponsor`)
+- **Video screenshots** — capture frames from any YouTube video by timestamp
+- **No API keys** — works without Google API credentials
 
-## Installation
+## Install
 
 ```bash
 npm install -g @inlustris/youtube-mcp
 ```
 
-## Configuration
+### Optional: Full-quality screenshots
 
-Add to your MCP client config (e.g., `.cursor/mcp.json`):
+The `get_video_frame` tool works out of the box for low-resolution captures. For **full-quality screenshots** (up to 4K), install:
+
+```bash
+brew install yt-dlp ffmpeg
+```
+
+On Linux: `apt install yt-dlp ffmpeg` or `pip install yt-dlp`.
+
+The tool auto-detects yt-dlp and falls back gracefully if it's not installed.
+
+## Usage
+
+### MCP Client (Cursor, Claude Desktop, etc.)
+
+Add to your MCP client config:
 
 ```json
 {
@@ -38,50 +53,104 @@ Add to your MCP client config (e.g., `.cursor/mcp.json`):
 }
 ```
 
-## Available Tools
+For [opencode](https://opencode.ai), add to `opencode.json`:
 
-### `get_transcript`
-Get video transcript from YouTube URL.
+```json
+{
+  "mcp": {
+    "youtube-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "@inlustris/youtube-mcp@latest"],
+      "enabled": true
+    }
+  }
+}
+```
 
-Parameters:
-- `videoUrl` (required): YouTube video URL
-- `chunkSize` (optional): Max characters per chunk
-- `chunkBySilence` (optional): Split by silence breaks
-- `silenceThreshold` (optional): Silence duration in ms
+### CLI
 
-### `search_videos`
-Search YouTube videos.
+```bash
+youtube-mcp
+```
 
-Parameters:
-- `query` (required): Search terms
-- `sortBy` (optional): `relevance`, `date`, `rating`, `viewCount`, `title`
+Starts the MCP server on stdio. Connect your MCP client to it.
 
-### `search_channels`
-Search YouTube channels.
+## Tools
 
-Parameters:
-- `query` (required): Search terms
-- `sortBy` (optional): `relevance`, `date`, `rating`, `viewCount`, `title`, `videoCount`
+| Tool | Description | Key Params |
+|---|---|---|
+| `get_transcript` | Get video transcript | `videoUrl` (req), `chunkSize`, `chunkBySilence`, `silenceThreshold`, `skipSponsor` |
+| `search_videos` | Search videos | `query` (req), `sortBy` |
+| `search_channels` | Search channels | `query` (req), `sortBy` |
+| `get_channel_videos` | Channel video list | `channelId` (req), `maxResults` |
+| `get_video_frame` | Capture video frame | `videoUrl` (req), `timestamp` (req), `quality` |
 
-### `get_channel_videos`
-Get videos from a channel.
+### Tool details
 
-Parameters:
-- `channelId` (required): YouTube channel ID
-- `maxResults` (optional): Number of videos (max 200)
+**`get_transcript`** — `skipSponsor: boolean`
+When enabled, fetches sponsor segment timestamps from the [SponsorBlock API](https://sponsor.ajay.app) (no auth needed) and filters them out of the transcript.
+
+**`get_video_frame`** — Capture a screenshot from any YouTube video at a given timestamp.
+- **With yt-dlp**: Full-resolution frame (up to 4K) using fast keyframe-seeking via ffmpeg.
+- **Without yt-dlp**: Falls back to YouTube storyboards (max 320×180, 2-second intervals).
+- The response includes the method used (`yt-dlp` or `storyboard`) and quality guidance.
 
 ## Development
 
 ```bash
+# Install dependencies
 npm install
-npm run dev        # Development server
-npm run start:http # HTTP server for testing
+
+# Dev server with hot reload
+npm run dev
+
+# Tests
+npm test              # single run
+npm run test:watch    # watch mode
+
+# Build for production
+npm run build
+
+# Run the built server
+node build/index.js
 ```
+
+### Project Structure
+
+```
+src/
+├── index.ts                  # Entry point
+├── server/
+│   └── server.ts             # FastMCP server setup
+├── core/
+│   ├── tools.ts              # Tool definitions
+│   ├── resources.ts          # Resource templates
+│   ├── prompts.ts            # Prompt templates
+│   └── services/
+│       ├── youtube-service.ts # YouTube API calls (via youtubei.js)
+│       ├── sponsorblock-service.ts  # SponsorBlock API client
+│       └── screenshot-service.ts    # Screenshot capture (yt-dlp + storyboard fallback)
+└── __tests__/
+    ├── youtube-service.test.ts
+    ├── tools.test.ts
+    └── resources.test.ts
+```
+
+## Dependencies
+
+| Dependency | Type | Purpose |
+|---|---|---|
+| `youtubei.js` | npm | YouTube data API (transcripts, search, channels) |
+| `fastmcp` | npm | MCP server framework |
+| `zod` | npm | Parameter validation |
+| `ffmpeg-static` | npm | Bundled ffmpeg binary for frame extraction |
+| `sharp` | npm | Image processing for storyboard thumbnails |
+| `yt-dlp` | **system** *(optional)* | Full-quality YouTube video URL extraction |
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
 MIT
-
-## Keywords
-
-YouTube transcript, MCP server, Model Context Protocol, YouTube API, video transcript extraction, AI tools, TypeScript, FastMCP, YouTube search, channel analysis, video content analysis, transcript chunking, Claude Desktop, Cursor IDE, AI development tools, YouTube data extraction, video processing, content analysis, automated transcription
